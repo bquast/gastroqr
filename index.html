@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Maps Review QR</title>
+    <link rel="stylesheet" href="/style.css"> <!-- Optional -->
+</head>
+<body>
+    <h1>Generate QR for Google Review</h1>
+    <form id="searchForm">
+        <input type="text" id="query" placeholder="Enter business name and address" required>
+        <button type="submit">Generate QR</button>
+    </form>
+    <div id="qrcode"></div>
+    <p id="shortUrl"></p>
+    <p id="error"></p>
+
+    <script src="/qrcode.min.js"></script>
+    <script>
+        const form = document.getElementById('searchForm');
+        const qrcodeDiv = document.getElementById('qrcode');
+        const shortUrlP = document.getElementById('shortUrl');
+        const errorP = document.getElementById('error');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const query = document.getElementById('query').value.trim();
+            if (!query) return;
+
+            errorP.textContent = '';
+            qrcodeDiv.innerHTML = '';
+            shortUrlP.textContent = '';
+
+            try {
+                const response = await fetch(`/api/find-review?query=${encodeURIComponent(query)}`);
+                if (!response.ok) throw new Error('API error');
+
+                const { shortUrl } = await response.json();
+                shortUrlP.textContent = `Short URL: ${shortUrl}`;
+
+                // Generate QR
+                new QRCode(qrcodeDiv, {
+                    text: shortUrl,
+                    width: 256,
+                    height: 256,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            } catch (err) {
+                errorP.textContent = `Error: ${err.message}`;
+            }
+        });
+    </script>
+</body>
+</html>
