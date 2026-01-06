@@ -1,5 +1,6 @@
 body { font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; }
 #qrcode { margin: 20px auto; text-align: center; }
-input { width: 100%; padding: 10px; margin-bottom: 10px; }
-button { padding: 10px; background: #4285f4; color: white; border: none; }
+input, select { width: 100%; padding: 10px; margin-bottom: 10px; }
+button { padding: 10px; background: #4285f4; color: white; border: none; margin-bottom: 10px; }
 #error { color: red; }
+#results { margin-top: 20px; }

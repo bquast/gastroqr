@@ -3,14 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <title>Maps Review QR</title>
-    <link rel="stylesheet" href="/style.css"> <!-- Optional -->
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
     <h1>Generate QR for Google Review</h1>
     <form id="searchForm">
-        <input type="text" id="query" placeholder="Enter business name and address" required>
-        <button type="submit">Generate QR</button>
+        <input type="text" id="query" placeholder="Enter business name and address (e.g., Hard Rock Cafe Zurich)" required>
+        <button type="submit">Search</button>
     </form>
+    <div id="results"></div> <!-- For dropdown if multiple -->
     <div id="qrcode"></div>
     <p id="shortUrl"></p>
     <p id="error"></p>
@@ -18,6 +19,7 @@
     <script src="/qrcode.min.js"></script>
     <script>
         const form = document.getElementById('searchForm');
+        const resultsDiv = document.getElementById('results');
         const qrcodeDiv = document.getElementById('qrcode');
         const shortUrlP = document.getElementById('shortUrl');
         const errorP = document.getElementById('error');
@@ -27,18 +29,54 @@
             const query = document.getElementById('query').value.trim();
             if (!query) return;
 
-            errorP.textContent = '';
-            qrcodeDiv.innerHTML = '';
-            shortUrlP.textContent = '';
-
+            clearOutputs();
             try {
-                const response = await fetch(`/api/find-review?query=${encodeURIComponent(query)}`);
-                if (!response.ok) throw new Error('API error');
+                const searchRes = await fetch(`/api/search-places?query=${encodeURIComponent(query)}`);
+                if (!searchRes.ok) throw new Error('Search error');
 
-                const { shortUrl } = await response.json();
+                const { places } = await searchRes.json();
+                if (places.length === 0) {
+                    errorP.textContent = 'No places found. Try a more specific query.';
+                    return;
+                }
+
+                if (places.length === 1) {
+                    // Auto-generate for single result
+                    await generateQR(places[0].id);
+                } else {
+                    // Show dropdown for multiple
+                    const select = document.createElement('select');
+                    select.id = 'placeSelect';
+                    places.forEach(place => {
+                        const option = document.createElement('option');
+                        option.value = place.id;
+                        option.textContent = `${place.name} - ${place.address}`;
+                        select.appendChild(option);
+                    });
+
+                    const button = document.createElement('button');
+                    button.textContent = 'Generate QR for Selected';
+                    button.addEventListener('click', async () => {
+                        const selectedId = select.value;
+                        if (selectedId) await generateQR(selectedId);
+                    });
+
+                    resultsDiv.appendChild(select);
+                    resultsDiv.appendChild(button);
+                }
+            } catch (err) {
+                errorP.textContent = `Error: ${err.message}`;
+            }
+        });
+
+        async function generateQR(placeId) {
+            try {
+                const genRes = await fetch(`/api/generate-review?place_id=${encodeURIComponent(placeId)}`);
+                if (!genRes.ok) throw new Error('Generate error');
+
+                const { shortUrl } = await genRes.json();
                 shortUrlP.textContent = `Short URL: ${shortUrl}`;
 
-                // Generate QR
                 new QRCode(qrcodeDiv, {
                     text: shortUrl,
                     width: 256,
@@ -50,7 +88,14 @@
             } catch (err) {
                 errorP.textContent = `Error: ${err.message}`;
             }
-        });
+        }
+
+        function clearOutputs() {
+            errorP.textContent = '';
+            qrcodeDiv.innerHTML = '';
+            shortUrlP.textContent = '';
+            resultsDiv.innerHTML = '';
+        }
     </script>
 </body>
 </html>
