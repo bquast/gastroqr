@@ -7,67 +7,85 @@
 </head>
 <body>
     <h1>Generate QR for Google Review</h1>
-    <form id="searchForm">
-        <input type="text" id="query" placeholder="Enter business name and address (e.g., Hard Rock Cafe Zurich)" required>
-        <button type="submit">Search</button>
-    </form>
-    <div id="results"></div> <!-- For dropdown if multiple -->
+    <div class="search-container">
+        <input type="text" id="query" placeholder="Enter business name and address (e.g., Hard Rock Cafe Zurich)" autocomplete="off">
+        <ul id="suggestions" class="suggestions"></ul>
+    </div>
     <div id="qrcode"></div>
     <p id="shortUrl"></p>
     <p id="error"></p>
 
     <script src="/qrcode.min.js"></script>
     <script>
-        const form = document.getElementById('searchForm');
-        const resultsDiv = document.getElementById('results');
+        const input = document.getElementById('query');
+        const suggestionsUl = document.getElementById('suggestions');
         const qrcodeDiv = document.getElementById('qrcode');
         const shortUrlP = document.getElementById('shortUrl');
         const errorP = document.getElementById('error');
 
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const query = document.getElementById('query').value.trim();
-            if (!query) return;
+        let timeout;
+        input.addEventListener('keyup', (e) => {
+            clearTimeout(timeout);
+            const query = input.value.trim();
+            if (query.length < 3) {
+                hideSuggestions();
+                return;
+            }
 
-            clearOutputs();
-            try {
-                const searchRes = await fetch(`/api/search-places?query=${encodeURIComponent(query)}`);
-                if (!searchRes.ok) throw new Error('Search error');
+            timeout = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/api/autocomplete?input=${encodeURIComponent(query)}`);
+                    if (!res.ok) throw new Error('Autocomplete error');
 
-                const { places } = await searchRes.json();
-                if (places.length === 0) {
-                    errorP.textContent = 'No places found. Try a more specific query.';
-                    return;
+                    const { suggestions } = await res.json();
+                    showSuggestions(suggestions);
+                } catch (err) {
+                    errorP.textContent = `Error: ${err.message}`;
+                    hideSuggestions();
                 }
+            }, 300); // Debounce 300ms
+        });
 
-                if (places.length === 1) {
-                    // Auto-generate for single result
-                    await generateQR(places[0].id);
-                } else {
-                    // Show dropdown for multiple
-                    const select = document.createElement('select');
-                    select.id = 'placeSelect';
-                    places.forEach(place => {
-                        const option = document.createElement('option');
-                        option.value = place.id;
-                        option.textContent = `${place.name} - ${place.address}`;
-                        select.appendChild(option);
-                    });
-
-                    const button = document.createElement('button');
-                    button.textContent = 'Generate QR for Selected';
-                    button.addEventListener('click', async () => {
-                        const selectedId = select.value;
-                        if (selectedId) await generateQR(selectedId);
-                    });
-
-                    resultsDiv.appendChild(select);
-                    resultsDiv.appendChild(button);
-                }
-            } catch (err) {
-                errorP.textContent = `Error: ${err.message}`;
+        suggestionsUl.addEventListener('click', async (e) => {
+            if (e.target.tagName === 'LI') {
+                const placeId = e.target.dataset.placeid;
+                const fullText = e.target.textContent;
+                input.value = fullText;
+                hideSuggestions();
+                clearOutputs();
+                await generateQR(placeId);
             }
         });
+
+        // Hide on click outside
+        document.addEventListener('click', (e) => {
+            if (!document.querySelector('.search-container').contains(e.target)) {
+                hideSuggestions();
+            }
+        });
+
+        function showSuggestions(suggestions) {
+            suggestionsUl.innerHTML = '';
+            if (suggestions.length === 0) {
+                hideSuggestions();
+                errorP.textContent = 'No suggestions found. Try refining your search.';
+                return;
+            }
+
+            suggestions.forEach(sug => {
+                const li = document.createElement('li');
+                li.dataset.placeid = sug.placeId;
+                li.textContent = `${sug.mainText} - ${sug.secondaryText}`;
+                suggestionsUl.appendChild(li);
+            });
+            suggestionsUl.style.display = 'block';
+        }
+
+        function hideSuggestions() {
+            suggestionsUl.style.display = 'none';
+            suggestionsUl.innerHTML = '';
+            errorP.textContent = '';
+        }
 
         async function generateQR(placeId) {
             try {
@@ -91,10 +109,9 @@
         }
 
         function clearOutputs() {
-            errorP.textContent = '';
             qrcodeDiv.innerHTML = '';
             shortUrlP.textContent = '';
-            resultsDiv.innerHTML = '';
+            errorP.textContent = '';
         }
     </script>
 </body>
